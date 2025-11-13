@@ -8,11 +8,11 @@ A droite, une visionneuse Panoramax.
 Lorsque l'utilisateurice clique sur un POI, les images Panoramax les plus proches apparaissent dans une galerie. Sur le modèle de panolinker, l'utilisateurice sélectionne l'image la plus appropriée, et en un clic elle est ajoutée à l'objet OSM. Et pourquoi pas en profiter pour renseigner les tags de l'image sur Panoramax !
 
 ## Avancement
-
+<img width="1919" height="1080" alt="image" src="https://github.com/user-attachments/assets/2b9b2370-d375-40f7-b16e-983d22bcc39e" />
 - [x] une web app en vue
 - [x] une galerie de miniatures cliquables, permettant d'afficher les intégrations panoramax correspondantes
 - [x] une carte leaflet avec des markers (requête overpass)
-- [ ] appel à l'API Panoramax pour obtenir les images à proximité
+- [x] appel à l'API Panoramax pour obtenir les images à proximité
 - [ ] connexion oauth à openstreetmap
 - [ ] enregistrement d'un changeset
 - [ ] connexion à Panoramax
