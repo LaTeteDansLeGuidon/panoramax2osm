@@ -10,8 +10,6 @@
       </p>
       <select v-model="selectedFilter" @change="$emit('filter-changed', selectedFilter)">
         <option value="bike">Vélo</option>
-        <option value="commerce">Commerces</option>
-        <option value="publicSpace">Espaces Publics</option>
       </select>
     </div>
   </div>

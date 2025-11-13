@@ -5,26 +5,36 @@
       <MapContainer
         :selectedFilter="selectedFilter"
         @poi-selected="handlePOISelected"
-        @panoramax-images-found="handlePanoramaxImagesFound"
+        @panoramax-image-selected="handlePanoramaxImageSelected"
+        @open-panoramax-viewer="handleOpenPanoramaxViewer"
+        @panoramax-images-updated="handlePanoramaxImagesUpdated"
       >
         <FilterBox @filter-changed="handleFilterChange" />
       </MapContainer>
     </div>
     <!-- Right panel -->
     <div class="right-panel">
-      <PanoramaxViewer :selectedImageUrl="selectedImageUrl" />
+      <PoiInfo :poi="selectedPOI" />
+      <PanoramaxViewer
+        :selectedImageUrl="selectedPanoramaxImage?.panoramaxUrl"
+        :isImageAssociated="isImageAssociated"
+      />
       <ImageGallery
         :images="panoramaxImages"
         @image-selected="handleImageSelected"
       />
       <button
         class="add-image-button"
-        :disabled="!selectedPOI || !selectedImageUrl"
+        :disabled="!selectedPOI || !selectedPanoramaxImage || isImageAssociated"
         @click="addImageToPOI"
       >
         Add this image to POI
-        <span v-if="!selectedPOI || !selectedImageUrl">
-          ({{ !selectedPOI ? "Select a POI first" : "Select an image first" }})
+        <span v-if="!selectedPOI || !selectedPanoramaxImage || isImageAssociated">
+          ({{
+            !selectedPOI ? "Select a POI first" :
+            !selectedPanoramaxImage ? "Select an image first" :
+            "Image already associated"
+          }})
         </span>
       </button>
     </div>
@@ -32,11 +42,13 @@
 </template>
 
 <script>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import MapContainer from '@/components/MapContainer.vue';
 import FilterBox from '@/components/FilterBox.vue';
 import PanoramaxViewer from '@/components/PanoramaxViewer.vue';
 import ImageGallery from '@/components/ImageGallery.vue';
+import { fetchPanoramaxImages } from '@/services/panoramaxService';
+import PoiInfo from '@/components/PoiInfo.vue';
 
 export default {
   components: {
@@ -44,53 +56,71 @@ export default {
     FilterBox,
     PanoramaxViewer,
     ImageGallery,
+    PoiInfo,
   },
   setup() {
     const selectedFilter = ref("bike");
     const selectedPOI = ref(null);
-    const selectedImageUrl = ref(null);
+    const selectedPanoramaxUrl = ref(null);
+    const selectedPanoramaxImage = ref(null);
     const panoramaxImages = ref([]);
+
+    const isImageAssociated = computed(() => {
+      if (!selectedPOI.value || !selectedPanoramaxImage.value) return false;
+      // Vérifie si le POI a un tag "panoramax" et si son ID correspond à l'image sélectionnée
+      return selectedPOI.value.tags?.panoramax === selectedPanoramaxImage.value.id;
+    });
+
 
     const handleFilterChange = (filter) => {
       selectedFilter.value = filter;
     };
 
-    const handlePOISelected = (poi) => {
+    const handlePOISelected = async (poi) => {
       selectedPOI.value = poi;
-    };
-
-    const handlePanoramaxImagesFound = (images) => {
-      panoramaxImages.value = images.map(image => ({
-        hash: image.properties.id,
-        thumbnail: image.properties.thumbnail,
-        url: `https://api.panoramax.xyz/#pic=${image.properties.id}`,
-      }));
-      if (images.length > 0) {
-        selectedImageUrl.value = `https://api.panoramax.xyz/#pic=${images[0].properties.id}`;
-      } else {
-        selectedImageUrl.value = null;
+      if (poi && poi.lat && poi.lng) {
+        const images = await fetchPanoramaxImages(poi.lat, poi.lng);
+        panoramaxImages.value = images;
       }
     };
 
-    const handleImageSelected = (hash) => {
-      selectedImageUrl.value = `https://api.panoramax.xyz/#pic=${hash}`;
+    const handlePanoramaxImageSelected = (image) => {
+      selectedPanoramaxImage.value = image;
+    };
+
+    const handleImageSelected = (image) => {
+      selectedPanoramaxImage.value = image;
+      selectedPanoramaxUrl.value = image.panoramaxUrl;
+    };
+
+    const handleOpenPanoramaxViewer = (image) => {
+      selectedPanoramaxUrl.value = image.panoramaxUrl;
+    };
+
+    const handlePanoramaxImagesUpdated = (images) => {
+      panoramaxImages.value = images;
     };
 
     const addImageToPOI = () => {
-      if (selectedPOI.value && selectedImageUrl.value) {
-        alert(`Image ${selectedImageUrl.value} added to POI ${selectedPOI.value.name}!`);
+      if (selectedPOI.value && selectedPanoramaxUrl.value) {
+        alert(`Image ${selectedPanoramaxUrl.value} added to POI ${selectedPOI.value.name}!`);
+        // Ajoute ici la logique pour associer l'image au POI
       }
     };
 
     return {
       selectedFilter,
       selectedPOI,
-      selectedImageUrl,
+      selectedPanoramaxImage,
+      isImageAssociated,
+      selectedPanoramaxUrl,
       panoramaxImages,
       handleFilterChange,
       handlePOISelected,
-      handlePanoramaxImagesFound,
+      handlePanoramaxImageSelected,
       handleImageSelected,
+      handleOpenPanoramaxViewer,
+      handlePanoramaxImagesUpdated,
       addImageToPOI,
     };
   },

@@ -18,27 +18,6 @@ export const fetchPOIs = async (bbox, filter) => {
       );
       out center qt;
     `;
-  } else if (filter === "commerce") {
-    overpassQuery = `
-      [out:json];
-      (
-        nwr["amenity"="supermarket"](${bbox});
-        nwr["amenity"="bakery"](${bbox});
-        nwr["amenity"="cafe"](${bbox});
-        nwr["amenity"="restaurant"](${bbox});
-      );
-      out center qt;
-    `;
-  } else if (filter === "publicSpace") {
-    overpassQuery = `
-      [out:json];
-      (
-        nwr["amenity"="bench"](${bbox});
-        nwr["amenity"="drinking_water"](${bbox});
-        nwr["amenity"="toilets"](${bbox});
-      );
-      out center qt;
-    `;
   }
 
   try {

@@ -8,6 +8,9 @@
     <div v-else-if="mapZoomLevel < 16" class="zoom-prompt">
       Zoomez pour charger les POI
     </div>
+    <div v-if="errorMessage" class="error-message">
+      {{ errorMessage }}
+    </div>
   </div>
 </template>
 
@@ -16,6 +19,7 @@ import { ref, onMounted } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchPOIs } from '@/services/overpassService';
+import { fetchPanoramaxImages, getPanoramaxImage } from '@/services/panoramaxService';
 
 export default {
   props: {
@@ -26,41 +30,14 @@ export default {
     const mapContainer = ref(null);
     const mapZoomLevel = ref(0);
     const poiLayer = ref(L.layerGroup());
+    const panoramaxLayer = ref(L.layerGroup());
     const selectedPOI = ref(null);
+    const selectedPanoramaxImage = ref(null);
     const isLoading = ref(false);
-    const bboxCache = ref({});
-    const allPoisCache = ref([]);
-    const coveredBboxes = ref([]);
-    const MAX_CACHE_SIZE = 5;
+    const errorMessage = ref("");
+    let isFetching = false; // Flag pour bloquer les requêtes trop fréquentes
 
-    // Fonction pour convertir un point et une distance en bbox
-    const pointToBbox = (lat, lng, distance) => {
-      const latDelta = distance / 111320;
-      const lngDelta = distance / (111320 * Math.cos(lat * (Math.PI / 180)));
-
-      const lonMin = lng - lngDelta;
-      const latMin = lat - latDelta;
-      const lonMax = lng + lngDelta;
-      const latMax = lat + latDelta;
-
-      return `${lonMin},${latMin},${lonMax},${latMax}`;
-    };
-
-    // Fonction pour récupérer les images Panoramax
-    const fetchPanoramaxImages = async (lat, lng, distance = 50) => {
-      const bbox = pointToBbox(lat, lng, distance);
-      const url = `https://panoramax.xyz/api/v1/pictures/?limit=10&bbox=${bbox}`;
-
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        return data.features || [];
-      } catch (error) {
-        console.error("Erreur lors de la récupération des images Panoramax :", error);
-        return [];
-      }
-    };
-
+    // Fonction pour créer une icône personnalisée
     const createCustomDivIcon = (iconPath, hasPanoramax = false) => {
       return L.divIcon({
         html: `
@@ -97,15 +74,14 @@ export default {
       });
     };
 
+    // Fonction pour choisir l'icône en fonction du POI
     const getIconForPOI = (poi) => {
       const tags = poi.tags || {};
       let iconPath = "/osm-symbols/amenity/point.svg";
       let hasPanoramax = false;
-
       if (tags.panoramax) {
         hasPanoramax = true;
       }
-
       const tagToIcon = {
         "amenity": {
           "bicycle_parking": "/osm-symbols/amenity/bicycle_parking.svg",
@@ -113,7 +89,6 @@ export default {
           "bicycle_pump": "/osm-symbols/amenity/bicycle_repair_station.svg",
         },
       };
-
       for (const [key, values] of Object.entries(tagToIcon)) {
         if (tags[key]) {
           const value = tags[key];
@@ -123,74 +98,30 @@ export default {
           }
         }
       }
-
       return createCustomDivIcon(iconPath, hasPanoramax);
     };
 
-    const isBboxCovered = (currentBbox) => {
-      const [cSouth, cWest, cNorth, cEast] = currentBbox.split(',').map(Number);
-      return coveredBboxes.value.some(cachedBbox => {
-        const [sSouth, sWest, sNorth, sEast] = cachedBbox.split(',').map(Number);
-        return (
-          cSouth >= sSouth &&
-          cWest >= sWest &&
-          cNorth <= sNorth &&
-          cEast <= sEast
-        );
+    // Fonction pour charger et afficher les images Panoramax
+    const loadPanoramaxImages = async (lat, lng) => {
+      panoramaxLayer.value.clearLayers();
+      const images = await fetchPanoramaxImages(lat, lng);
+      images.forEach(image => {
+        const marker = L.circleMarker([image.lat, image.lng], {
+          radius: 6,
+          fillColor: "#ff7800",
+          color: "#000",
+          weight: 1,
+          opacity: 0.5,
+          fillOpacity: 0.4,
+          imageId: image.id,
+        }).addTo(panoramaxLayer.value);
+        marker.on('click', () => {
+          emit('panoramax-image-selected', image);
+        });
       });
     };
 
-    const getPoisForBbox = (currentBbox) => {
-      const [cSouth, cWest, cNorth, cEast] = currentBbox.split(',').map(Number);
-      return allPoisCache.value
-        .filter(item => {
-          const { lat, lon } = item.poi;
-          return (
-            lat >= cSouth && lat <= cNorth &&
-            lon >= cWest && lon <= cEast
-          );
-        })
-        .map(item => item.poi);
-    };
-
-    const fetchAndDisplayPOIs = async () => {
-      if (mapZoomLevel.value < 16 || isLoading.value) return;
-
-      const bounds = map.value.getBounds();
-      const currentBbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
-
-      if (isBboxCovered(currentBbox)) {
-        const pois = getPoisForBbox(currentBbox);
-        displayPOIsOnMap(pois);
-        return;
-      }
-
-      isLoading.value = true;
-      emit('loading', true);
-
-      try {
-        const pois = await fetchPOIs(currentBbox, props.selectedFilter);
-        bboxCache.value[currentBbox] = pois;
-        allPoisCache.value.push(...pois.map(poi => ({ poi, sourceBbox: currentBbox })));
-        coveredBboxes.value.push(currentBbox);
-
-        if (coveredBboxes.value.length > MAX_CACHE_SIZE) {
-          const oldestBbox = coveredBboxes.value.shift();
-          delete bboxCache.value[oldestBbox];
-          allPoisCache.value = allPoisCache.value.filter(item => item.sourceBbox !== oldestBbox);
-        }
-
-        displayPOIsOnMap(pois);
-      } catch (error) {
-        console.error("Erreur lors de la récupération des POI :", error);
-      } finally {
-        setTimeout(() => {
-          isLoading.value = false;
-          emit('loading', false);
-        }, 3000);
-      }
-    };
-
+    // Fonction pour afficher les POI sur la carte
     const displayPOIsOnMap = (pois) => {
       poiLayer.value.clearLayers();
       pois.forEach(poi => {
@@ -200,38 +131,139 @@ export default {
           const marker = L.marker([lat, lng], {
             icon: getIconForPOI(poi),
           }).addTo(poiLayer.value);
-          marker.bindPopup(`
+
+          // Contenu initial de la popup
+          let popupContent = `
             <b>${poi.tags?.name || "POI"}</b><br>
             ${poi.tags?.amenity}<br>
-            ${poi.tags?.capacity ? `Capacité : ${poi.tags.capacity}` : ""}
-          `);
+            ${poi.tags?.capacity ? `Capacité : ${poi.tags.capacity}<br>` : ""}
+            <span id="panoramax-link-${poi.id}" style="color: black; cursor: default;">
+              Recherche des images Panoramax à proximité...
+            </span>
+          `;
+          marker.bindPopup(popupContent);
+
+          // Gestion du clic sur le marqueur
           marker.on('click', async () => {
-            selectedPOI.value = { id: poi.id, name: poi.tags?.name || "POI", lat, lng };
+            selectedPOI.value = { id: poi.id, name: poi.tags?.name || "POI", lat, lng ,tags: poi.tags };
             emit('poi-selected', selectedPOI.value);
 
-            // Récupère les images Panoramax à proximité
-            const images = await fetchPanoramaxImages(lat, lng, 50);
-            emit('panoramax-images-found', images);
+            // Charge les images Panoramax autour du POI
+            await loadPanoramaxImages(lat, lng);
+            const images = await fetchPanoramaxImages(lat, lng);
+            const panoramaxId = poi.tags?.panoramax; // ID de l'image associée dans OSM
+
+            // Si une image est associée dans OSM, on l'affiche en priorité
+            if (panoramaxId) {
+              const associatedImage = images.find(img => img.id === panoramaxId);
+              if (associatedImage) {
+                emit('panoramax-image-selected', associatedImage);
+              } else {
+                // Sinon, on essaie de récupérer l'image directement depuis Panoramax
+                const image = await getPanoramaxImage(panoramaxId);
+                if (image) {
+                  emit('panoramax-image-selected', image);
+                } else if (images.length > 0) {
+                  // Si aucune image associée, on prend la première disponible
+                  emit('panoramax-image-selected', images[0]);
+                } else {
+                  emit('panoramax-image-selected', null);
+                }
+              }
+            } else if (images.length > 0) {
+              // Si pas d'image associée, on affiche la première disponible
+              emit('panoramax-image-selected', images[0]);
+            } else {
+              emit('panoramax-image-selected', null);
+            }
+          });
+
+          // Mise à jour du lien Panoramax quand la popup s'ouvre
+          marker.on('popupopen', async () => {
+            const linkElement = document.getElementById(`panoramax-link-${poi.id}`);
+            if (!linkElement) return;
+
+            try {
+              const images = await fetchPanoramaxImages(lat, lng);
+              const panoramaxId = poi.tags?.panoramax; // ID de l'image associée dans OSM
+
+              if (images.length > 0) {
+                // Si une image est associée dans OSM, on la met en avant
+                const associatedImage = images.find(img => img.id === panoramaxId);
+                if (associatedImage) {
+                  linkElement.textContent = `✅ Image Panoramax déjà associée, postée par ${associatedImage.providerName || "un·e contributeur·rice"} sur l'instance ${associatedImage.instanceName || "Panoramax"}`;
+                  linkElement.style.cursor = 'pointer';
+                  linkElement.style.color = 'green';
+                  linkElement.onclick = () => {
+                    emit('open-panoramax-viewer', associatedImage);
+                  };
+                } else {
+                  linkElement.textContent = `📷 ${images.length} image${images.length > 1 ? 's' : ''} Panoramax disponible${images.length > 1 ? 's' : ''} à proximité`;
+                  linkElement.style.cursor = 'default';
+                  linkElement.style.textDecoration = 'none';
+                  linkElement.style.color = 'black';
+                  linkElement.onclick = null;
+                }
+              } else {
+                linkElement.textContent = '❌ Aucune image Panoramax disponible à proximité';
+                linkElement.style.cursor = 'default';
+                linkElement.style.textDecoration = 'none';
+                linkElement.style.color = 'black';
+                linkElement.onclick = null;
+              }
+            } catch (error) {
+              console.error("Erreur lors de la vérification des images Panoramax :", error);
+              linkElement.textContent = '⚠️ Erreur lors de la vérification des images Panoramax';
+              linkElement.style.cursor = 'default';
+              linkElement.style.textDecoration = 'none';
+              linkElement.style.color = 'red';
+              linkElement.onclick = null;
+            }
           });
         }
       });
     };
 
-    let moveEndTimeout = null;
+    // Fonction pour récupérer et afficher les POI avec un délai de 3 secondes entre chaque requête
+    const fetchAndDisplayPOIs = async () => {
+      if (mapZoomLevel.value < 16 || isLoading.value || isFetching) return;
 
+      const bounds = map.value.getBounds();
+      const currentBbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+
+      isFetching = true; // Bloque les nouvelles requêtes
+      isLoading.value = true;
+      errorMessage.value = "";
+      emit('loading', true);
+
+      try {
+        const pois = await fetchPOIs(currentBbox, props.selectedFilter);
+        displayPOIsOnMap(pois);
+      } catch (error) {
+        console.error("Erreur lors de la récupération des POI :", error);
+        errorMessage.value = `Erreur Overpass : ${error.message}`;
+      } finally {
+        isLoading.value = false;
+        emit('loading', false);
+        // Réactive les requêtes après 3 secondes
+        setTimeout(() => {
+          isFetching = false;
+        }, 3000);
+      }
+    };
+
+    let moveEndTimeout = null;
     onMounted(() => {
       if (mapContainer.value) {
         map.value = L.map(mapContainer.value, {
           maxZoom: 22,
         }).setView([48.8584, 2.2945], 12);
-
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
           maxZoom: 19,
         }).addTo(map.value);
-
         poiLayer.value.addTo(map.value);
-
+        panoramaxLayer.value.addTo(map.value);
         map.value.on('moveend', () => {
           clearTimeout(moveEndTimeout);
           moveEndTimeout = setTimeout(() => {
@@ -240,7 +272,6 @@ export default {
             }
           }, 500);
         });
-
         map.value.on('zoomend', () => {
           mapZoomLevel.value = map.value.getZoom();
         });
@@ -250,8 +281,8 @@ export default {
     return {
       mapContainer,
       mapZoomLevel,
-      selectedPOI,
       isLoading,
+      errorMessage,
     };
   },
 };
@@ -302,6 +333,18 @@ export default {
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  z-index: 1000;
+  font-size: 14px;
+}
+.error-message {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 0, 0, 0.7);
   color: white;
   padding: 8px 12px;
   border-radius: 4px;

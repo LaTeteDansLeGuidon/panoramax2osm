@@ -1,101 +1,66 @@
 <template>
-  <div class="image-gallery">
-    <h3>Images Panoramax</h3>
-    <div v-if="loading" class="loading-message">
-      <p>Appel de l'API Panoramax en cours...</p>
-      <p>URL : {{ apiUrl }}</p>
-    </div>
-    <div v-else-if="images.length > 0" class="gallery-container">
+  <div class="gallery-container">
+    <h3>Nearby Panoramax Images</h3>
+    <div class="gallery">
       <div
-        v-for="(image, index) in images"
-        :key="index"
-        class="gallery-item"
-        @click="selectImage(image.hash)"
+        v-for="image in images"
+        :key="image.id"
+        class="thumbnail"
+        @click="$emit('image-selected', image)"
       >
-        <img :src="image.thumbnail" />
+        <img :src="image.thumbUrl" :alt="`Panoramax Image ${image.id}`" />
       </div>
     </div>
-    <p v-else-if="!loading && apiUrl">Pas d'images Panoramax à proximité (API appelée : {{ apiUrl }}).</p>
-    <p v-else>Pas d'images Panoramax à proximité.</p>
   </div>
 </template>
 
-
 <script>
-import { ref } from 'vue';
-
 export default {
   props: {
-    images: {
-      type: Array,
-      default: () => [],
-    },
-    apiUrl: {
-      type: String,
-      default: '',
-    },
-    loading: {
-      type: Boolean,
-      default: false,
-    },
-  },
-  emits: ['image-selected'],
-  setup(props, { emit }) {
-    const selectImage = (hash) => {
-      emit('image-selected', hash);
-    };
-
-    return {
-      selectImage,
-    };
+    images: Array,
   },
 };
 </script>
 
-
 <style scoped>
-.image-gallery {
+.gallery-container {
   flex: 1;
   border: 1px solid #ccc;
   padding: 10px;
   margin-bottom: 10px;
   overflow: hidden;
-}
-
-.image-gallery h3 {
-  margin-top: 0;
-  font-size: 14px;
-}
-
-.loading-message {
-  background-color: #f0f0f0;
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 10px;
-}
-
-.loading-message p {
-  margin: 5px 0;
-  font-size: 12px;
-}
-
-.gallery-container {
+  min-height: 0;
   display: flex;
+  flex-direction: column;
+}
+
+.gallery-container h3 {
+  margin: 0;
+  padding: 0 0 10px 0;
+}
+
+.gallery {
+  flex: 1;
+  display: flex;
+  flex-wrap: nowrap;
   overflow-x: auto;
-  gap: 8px;
-  padding: 8px 0;
+  overflow-y: hidden;
+  padding: 10px;
+  min-height: 0;
 }
 
-.gallery-item {
+.thumbnail {
   flex: 0 0 auto;
+  height: 100%;
+  width: 120px;
+  cursor: pointer;
+  border: 1px solid #ddd;
+  overflow: hidden;
 }
 
-.gallery-item img {
-  width: 80px;
-  height: 60px;
+.thumbnail img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 4px;
-  cursor: pointer;
 }
 </style>
-
