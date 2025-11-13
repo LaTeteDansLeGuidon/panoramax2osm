@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   plugins: [vue()],
-  base: "https://latetedansleguidon.github.io/panoramax2osm/",
+  base: "https://panoramax2osm.vercel.app/",
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
