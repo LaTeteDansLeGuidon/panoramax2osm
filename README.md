@@ -13,6 +13,8 @@ Lorsque l'utilisateurice clique sur un POI, les images Panoramax les plus proche
 - [x] une galerie de miniatures cliquables, permettant d'afficher les intégrations panoramax correspondantes
 - [x] une carte leaflet avec des markers (requête overpass)
 - [ ] appel à l'API Panoramax pour obtenir les images à proximité
-- [ ] connextion oauth à openstreetmap
+- [ ] connexion oauth à openstreetmap
 - [ ] enregistrement d'un changeset
+- [ ] connexion à Panoramax
+- [ ] ajout des tags dans Panoramax
 - [ ] compléter le filtre 'Vélo', créer un filtre 'Commerces', un filtre 'Espace public' (pour les bancs, toilettes publiques etc)
