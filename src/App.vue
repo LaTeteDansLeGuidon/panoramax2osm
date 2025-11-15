@@ -16,8 +16,9 @@
     <div class="right-panel">
       <PoiInfo :poi="selectedPOI" />
       <PanoramaxViewer
-        :selectedImageUrl="selectedPanoramaxImage?.panoramaxUrl"
+        :selectedImageId="selectedPanoramaxImage?.id"
         :isImageAssociated="isImageAssociated"
+        @photo-changed="handlePhotoChange"
       />
       <ImageGallery
         :images="panoramaxImages"
@@ -28,7 +29,7 @@
         :disabled="!selectedPOI || !selectedPanoramaxImage || isImageAssociated"
         @click="addImageToPOI"
       >
-        Add this image to POI
+        Add image {{ selectedPanoramaxImage?.id || '?' }} to POI
         <span v-if="!selectedPOI || !selectedPanoramaxImage || isImageAssociated">
           ({{
             !selectedPOI ? "Select a POI first" :
@@ -67,10 +68,8 @@ export default {
 
     const isImageAssociated = computed(() => {
       if (!selectedPOI.value || !selectedPanoramaxImage.value) return false;
-      // Vérifie si le POI a un tag "panoramax" et si son ID correspond à l'image sélectionnée
       return selectedPOI.value.tags?.panoramax === selectedPanoramaxImage.value.id;
     });
-
 
     const handleFilterChange = (filter) => {
       selectedFilter.value = filter;
@@ -101,10 +100,18 @@ export default {
       panoramaxImages.value = images;
     };
 
+    const handlePhotoChange = (newPhotoId) => {
+      const image = panoramaxImages.value.find(img => img.id === newPhotoId);
+      if (image) {
+        selectedPanoramaxImage.value = image;
+      } else {
+        selectedPanoramaxImage.value = { id: newPhotoId };
+      }
+    };
+
     const addImageToPOI = () => {
       if (selectedPOI.value && selectedPanoramaxUrl.value) {
         alert(`Image ${selectedPanoramaxUrl.value} added to POI ${selectedPOI.value.name}!`);
-        // Ajoute ici la logique pour associer l'image au POI
       }
     };
 
@@ -115,6 +122,7 @@ export default {
       isImageAssociated,
       selectedPanoramaxUrl,
       panoramaxImages,
+      handlePhotoChange, // Assure-toi que c'est bien le même nom
       handleFilterChange,
       handlePOISelected,
       handlePanoramaxImageSelected,

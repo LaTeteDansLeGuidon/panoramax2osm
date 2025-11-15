@@ -1,18 +1,18 @@
 <template>
   <div class="panoramax-viewer">
     <h3>Panoramax Viewer</h3>
-    <div class="iframe-container">
+    <div class="viewer-container">
       <div v-if="isImageAssociated" class="associated-banner">
         ⚠️ Cette image est déjà associée à ce POI.
       </div>
-      <iframe
-        v-if="selectedImageUrl"
-        :src="selectedImageUrl"
-        width="100%"
-        height="100%"
-        frameborder="0"
-        ref="panoramaxIframe"
-      ></iframe>
+      <div v-if="selectedImageId" class="viewer-wrapper">
+        <pnx-photo-viewer
+          :picture="selectedImageId"
+          endpoint="/api"
+          class="panoramax-viewer-instance"
+          @select="onPhotoSelect"
+        />
+      </div>
       <p v-else>
         Aucune image Panoramax associée à ce POI. Veuillez choisir une image dans la galerie.
       </p>
@@ -21,14 +21,22 @@
 </template>
 
 
+
 <script>
 export default {
   props: {
-    selectedImageUrl: String,
+    selectedImageId: String,
     isImageAssociated: Boolean,
+  },
+  methods: {
+    onPhotoSelect(event) {
+      // Émet l'ID de la photo sélectionnée vers le parent
+      this.$emit('photo-changed', event.detail.picId);
+    },
   },
 };
 </script>
+
 
 <style scoped>
 .panoramax-viewer {
@@ -41,17 +49,16 @@ export default {
   display: flex;
   flex-direction: column;
 }
-.iframe-container {
+.viewer-container {
   position: relative;
   flex: 1;
   width: 100%;
   height: 100%;
   min-height: 0;
 }
-.iframe-container iframe {
+.panoramax-viewer-instance {
   width: 100%;
   height: 100%;
-  border: none;
 }
 .associated-banner {
   position: absolute;
@@ -76,3 +83,4 @@ export default {
   margin: 0;
 }
 </style>
+

@@ -14,6 +14,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@panoramax/web-viewer": "^4.2.0",
     "axios": "^1.13.2",
     "leaflet": "^1.9.4",
     "pinia": "^3.0.3",
